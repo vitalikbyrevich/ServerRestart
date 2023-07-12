@@ -10,7 +10,7 @@ namespace ServerRestart
     {
         public DateTime NextRestartDate { get; private set; }
 
-        public static event Action<string> OnRestartMessageSent;
+        public static event Action<DateTime> OnScheduledRestartChanged;
 
         public bool RestartStarted { get; private set; }
 
@@ -28,7 +28,7 @@ namespace ServerRestart
         {
             var currentTime = DateTime.UtcNow;
             var timeLeft = NextRestartDate - currentTime;
-            if (NextRestartDate.Ticks > 0)
+            if (NextRestartDate != default)
                 Log.Message($"Next restart {NextRestartDate}. Time left: {timeLeft}");
             else
                 Log.Message("No scheduled restarts");
@@ -42,17 +42,17 @@ namespace ServerRestart
             var schedule = Plugin.RestartTimes.Value.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
             if (schedule.Length == 0)
             {
-                NextRestartDate = DateTime.MinValue;
+                NextRestartDate = default;
                 Log.Message("Restart schedule is empty");
+                OnScheduledRestartChanged?.Invoke(NextRestartDate);
                 return;
             }
             NextRestartDate = GetNextRestartDate(schedule);
             Log.Message($"Next restart scheduled at {NextRestartDate}. Time left {NextRestartDate - DateTime.UtcNow}");
+            
+            if (Plugin.ShutDownServer.Value) StartCoroutine(ScheduleRestart(NextRestartDate));
 
-            StartCoroutine(ScheduleRestart(NextRestartDate));
-            StartCoroutine(ScheduleMessage(NextRestartDate.Subtract(TimeSpan.FromMinutes(1)), Plugin.Message1Min.Value));
-            StartCoroutine(ScheduleMessage(NextRestartDate.Subtract(TimeSpan.FromMinutes(10)), Plugin.Message10Mins.Value));
-            StartCoroutine(ScheduleMessage(NextRestartDate.Subtract(TimeSpan.FromHours(1)), Plugin.Message1Hour.Value));
+            OnScheduledRestartChanged?.Invoke(NextRestartDate);
         }
 
         private IEnumerator ScheduleRestart(DateTime date)
@@ -72,27 +72,6 @@ namespace ServerRestart
 
             Log.Message("Stopping server");
             Application.Quit();
-        }
-
-        private IEnumerator ScheduleMessage(DateTime date, string message)
-        {
-            if (DateTime.UtcNow > date)
-                yield break;
-
-            Log.Debug($"Schedule message '{message}' at {date}");
-            yield return new WaitUntil(() => DateTime.UtcNow >= date);
-            Log.Debug($"Sending message '{message}'");
-            SendMessageToAll(message);
-            OnRestartMessageSent?.Invoke(message);
-        }
-
-        private void SendMessageToAll(string message)
-        {
-            ZRoutedRpc.instance.InvokeRoutedRPC(ZRoutedRpc.Everybody, "ShowMessage", new object[]
-            {
-                (int)MessageHud.MessageType.Center,
-                message
-            });
         }
 
         private DateTime GetNextRestartDate(IEnumerable<string> schedule)
