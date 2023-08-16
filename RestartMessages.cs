@@ -53,7 +53,7 @@ namespace ServerRestart
             ZRoutedRpc.instance.InvokeRoutedRPC(ZRoutedRpc.Everybody, "ShowMessage", new object[]
             {
                 (int)MessageHud.MessageType.Center,
-                message
+                "<color=\"yellow\"><size=100>"+message+"</size></color>"
             });
         }
 
@@ -67,6 +67,12 @@ namespace ServerRestart
             {
                 DiscordTool.SendMessageToDiscord(webhookUrl, displayName, message);
             });
+        }
+        public static void SendMessageChat(string message)
+        {
+            var user = UserInfo.GetLocalUser();
+            user.Name = Plugin.DiscordName.Value;
+            ZRoutedRpc.instance.InvokeRoutedRPC(ZRoutedRpc.Everybody, "ChatMessage", Vector3.zero, 2, user, message, PrivilegeManager.GetNetworkUserId());
         }
     } 
 }
